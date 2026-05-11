@@ -1,0 +1,55 @@
+name: Delete all videos
+
+on:
+  workflow_dispatch:
+    inputs:
+      warning:
+        description: ' WARNING : this delete all videos downloaded.'
+        required: false
+        default: 'for start deleting press run '
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove videos folder, recreate it and add README.md
+        run: |
+          rm -rf videos
+          mkdir videos
+          echo "this folder is empty. start using with actions" > videos/README.md
+
+      - name: Commit and push changes (without adding to git history)
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          # Force add because videos/ is in .gitignore
+          git add -f videos/
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit --amend -m "[AVASAM] Videos update [skip ci]" 2>/dev/null || git commit -m "[AVASAM] Videos update [skip ci]"
+
+            # Force push to overwrite remote (keeps history minimal)
+            PUSH_RETRY=0
+            while [ $PUSH_RETRY -lt 5 ]; do
+              PUSH_RETRY=$((PUSH_RETRY + 1))
+              if git push --force origin HEAD:"${{ github.ref_name }}"; then
+                echo " videos folder cleaned and pushed successfully"
+                break
+              else
+                echo "Push failed retry $PUSH_RETRY/5..."
+                sleep 3
+              fi
+            done
+          fi
+
